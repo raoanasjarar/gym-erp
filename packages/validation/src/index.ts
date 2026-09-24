@@ -14,6 +14,10 @@ export const memberInputSchema = z.object({
   weightKg: z.coerce.number().positive().max(500).optional(),
   joinDate: z.string().min(8),
   notes: z.string().optional(),
+  profilePhotoBase64: z.string().optional(),
+  profilePhotoDataUrl: z.string().optional(),
+  photoBase64: z.string().optional(),
+  profilePhotoPath: z.string().optional(),
 });
 
 export const memberUpdateSchema = memberInputSchema.partial();

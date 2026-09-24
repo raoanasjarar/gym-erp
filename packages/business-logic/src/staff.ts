@@ -79,7 +79,16 @@ export async function createStaffOffline(
       operation: "create",
       deviceId: ctx.deviceId,
       version: 1,
-      payload: { employeeId, userId, fullName: data.fullName, role: data.role },
+      payload: {
+        id: employeeId,
+        gymId: ctx.gymId,
+        userId,
+        fullName: data.fullName,
+        phone: data.phone ?? null,
+        role: data.role,
+        salaryMinor: data.salaryMinor ?? null,
+        hiredAt: data.hireDate ?? ts.slice(0, 10),
+      },
     });
     writeAudit(db, {
       gymId: ctx.gymId,

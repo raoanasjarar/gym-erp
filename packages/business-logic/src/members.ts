@@ -57,6 +57,8 @@ export function createMemberOffline(
   const id = newId();
   const memberCode = nextMemberCode(db, ctx.gymId);
   const ts = nowIso();
+  const photoBase64 = data.profilePhotoBase64 ?? data.profilePhotoDataUrl ?? data.photoBase64 ?? null;
+  const photoPath = photoBase64 ? `member-photos/${id}.jpg` : null;
 
   db.transaction(() => {
     db.run(
@@ -65,7 +67,7 @@ export function createMemberOffline(
         address, date_of_birth, gender, emergency_contact, blood_group, join_date, status, notes,
         fingerprint_template_id, face_template_id, profile_photo_path, profile_photo_thumb_path, weight_kg,
         version, last_modified_by_device_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NULL, NULL, NULL, NULL, ?, 1, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NULL, NULL, ?, ?, ?, 1, ?, ?, ?)`,
       [
         id,
         ctx.gymId,
@@ -83,6 +85,8 @@ export function createMemberOffline(
         data.bloodGroup ?? null,
         data.joinDate,
         data.notes ?? null,
+        photoPath,
+        photoPath,
         data.weightKg ?? null,
         ctx.deviceId,
         ts,
@@ -115,6 +119,9 @@ export function createMemberOffline(
         joinDate: data.joinDate,
         status: "pending",
         notes: data.notes ?? null,
+        profilePhotoPath: photoPath,
+        profilePhotoThumbPath: photoPath,
+        ...(photoBase64 ? { profilePhotoBase64: photoBase64 } : {}),
       },
     });
     writeAudit(db, {

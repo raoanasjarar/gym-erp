@@ -196,6 +196,28 @@ export function startDesktopServer(db: SqlDatabase, options: DesktopServerOption
     return value;
   }
 
+  function saveSyncedMemberPhoto(record: {
+    entityType: string;
+    operation: string;
+    entityId: string;
+    payloadJson: string;
+  }): void {
+    if (record.entityType !== "members" || record.operation === "delete") return;
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(String(record.payloadJson)) as Record<string, unknown>;
+    } catch {
+      return;
+    }
+    const photoDataUrl = payload.profilePhotoBase64 ?? payload.profilePhotoDataUrl ?? payload.photoBase64;
+    if (typeof photoDataUrl !== "string" || !photoDataUrl.startsWith("data:image/")) return;
+    const comma = photoDataUrl.indexOf(",");
+    if (comma < 0) return;
+    const memberId = String(record.entityId);
+    const photoPath = join(facePhotosDir, `${memberId}.jpg`);
+    writeFileSync(photoPath, Buffer.from(photoDataUrl.slice(comma + 1), "base64"));
+  }
+
   function faceFrame(body: Record<string, unknown>): FaceFrame {
     const width = Number(body.width);
     const height = Number(body.height);
@@ -291,7 +313,11 @@ export function startDesktopServer(db: SqlDatabase, options: DesktopServerOption
       }
       const body = await readBody(req);
       const records = Array.isArray(body.records) ? (body.records as Parameters<typeof applyIncomingRecords>[1]) : [];
-      return json(res, 200, applyIncomingRecords(db, records));
+      const result = applyIncomingRecords(db, records);
+      for (const record of records) {
+        if (record.operation === "create") saveSyncedMemberPhoto(record);
+      }
+      return json(res, 200, result);
     }
     if (path === "/api/hub/pull" && method === "GET") {
       const deviceIdHeader = req.headers["x-gym-device"];

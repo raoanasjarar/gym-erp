@@ -46,6 +46,7 @@ describe("database migrations", () => {
         "002_seed_roles",
         "003_phase3_schema_hardening",
         "004_member_profile_measurements",
+        "005_employee_sync_version",
       ]);
     } finally {
       db.close();

@@ -58,8 +58,10 @@ export type ConflictDecision =
 const SENSITIVE_ENTITIES = new Set(["payments", "memberships", "members", "expenses"]);
 
 export function resolveIncoming(local: SyncRecord | null, incoming: SyncRecord): ConflictDecision {
-  if (!local || local.version < incoming.version) return { kind: "auto-remote" };
-  if (local.version > incoming.version) return { kind: "auto-local" };
+  const localVersion = Number.isFinite(local?.version) ? Number(local!.version) : 0;
+
+  if (!local || localVersion < incoming.version) return { kind: "auto-remote" };
+  if (localVersion > incoming.version) return { kind: "auto-local" };
   if (local.payloadJson === incoming.payloadJson) return { kind: "auto-local" };
   if (new Date(incoming.timestamp).getTime() > new Date(local.timestamp).getTime() && !SENSITIVE_ENTITIES.has(incoming.entityType)) {
     return { kind: "auto-remote" };
@@ -70,7 +72,7 @@ export function resolveIncoming(local: SyncRecord | null, incoming: SyncRecord):
       gymId: incoming.gymId,
       entityType: incoming.entityType,
       entityId: incoming.entityId,
-      localVersion: local.version,
+      localVersion,
       remoteVersion: incoming.version,
       localPayloadJson: local.payloadJson,
       remotePayloadJson: incoming.payloadJson,

@@ -512,6 +512,7 @@ export function applyIncomingRecords(
     }
 
     const existing = db.get<Record<string, unknown>>(`SELECT * FROM ${table} WHERE id = ?`, [dto.entityId]);
+    const existingVersion = Number.isFinite(existing?.version) ? Number(existing!.version) : 0;
     // Rebuild the local payload from the stored row so conflict comparison
     // compares real local data against the incoming change.
     const inverseColumns: Record<string, string> = {};
@@ -535,7 +536,7 @@ export function applyIncomingRecords(
           entityId: dto.entityId,
           operation: dto.operation,
           deviceId: "hub",
-          version: existing.version as number,
+          version: existingVersion,
           payloadJson: localPayloadJson ?? "{}",
           timestamp: ts,
           createdAt: ts,

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SqlJsDatabase, applyMigrations } from "@gym-erp/database";
-import { completeFirstRun, createMemberOffline } from "@gym-erp/business-logic";
+import { completeFirstRun, createMemberOffline, createStaffOffline } from "@gym-erp/business-logic";
 import { createSyncRecord } from "../src/index.js";
 import {
   applyIncomingRecords,
@@ -131,6 +131,100 @@ describe("sync round trip", () => {
       const renamed = db.get<{ full_name: string }>(`SELECT full_name FROM members WHERE id = ?`, [memberId]);
       expect(renamed?.full_name).toBe("Conflict Case EDITED");
       expect(listConflicts(db, gymId).length).toBe(1); // still listed, now resolved=1
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("syncs a newly created staff user payload to the hub without dropping the employee id", async () => {
+    const { db, gymId, organizationId, dir } = await makeDb();
+    try {
+      await createStaffOffline(
+        db,
+        { gymId, organizationId, userId: "u", deviceId: "device-a" },
+        {
+          fullName: "Mobile Staff",
+          username: "mobilestaff",
+          password: "StrongPass!1",
+          role: "staff",
+          phone: "03001234567",
+        },
+      );
+
+      const inserted = db.get<{ payload_json: string }>(
+        `SELECT payload_json FROM sync_records WHERE entity_type = 'employees' ORDER BY created_at DESC LIMIT 1`,
+      );
+      expect(inserted?.payload_json).toContain('"id":"');
+      expect(inserted?.payload_json).toContain('"gymId":"' + gymId + '"');
+
+      const payload = JSON.parse(inserted!.payload_json) as Record<string, unknown>;
+      const result = applyIncomingRecords(db, [{
+        id: "device-employee-sync-1",
+        gymId,
+        entityType: "employees",
+        entityId: String(payload.id),
+        operation: "create",
+        deviceId: "device-a",
+        version: 1,
+        payloadJson: JSON.stringify(payload),
+        timestamp: new Date().toISOString(),
+      }]);
+
+      expect(result.applied + result.skipped + result.conflicts).toBe(1);
+      const employeeRow = db.get<{ full_name: string; gym_id: string }>(
+        `SELECT full_name, gym_id FROM employees WHERE id = ?`,
+        [String(payload.id)],
+      );
+      expect(employeeRow?.full_name).toBe("Mobile Staff");
+      expect(employeeRow?.gym_id).toBe(gymId);
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not insert undefined local versions when reconciling an existing employee row", async () => {
+    const { db, gymId, organizationId, dir } = await makeDb();
+    try {
+      await createStaffOffline(
+        db,
+        { gymId, organizationId, userId: "u", deviceId: "device-a" },
+        {
+          fullName: "Existing Staff",
+          username: "existingstaff",
+          password: "StrongPass!1",
+          role: "staff",
+          phone: "03001112222",
+        },
+      );
+      const employeeId = db.get<{ id: string }>(`SELECT id FROM employees LIMIT 1`)?.id as string;
+
+      const result = applyIncomingRecords(db, [{
+        id: "employee-conflict-1",
+        gymId,
+        entityType: "employees",
+        entityId: employeeId,
+        operation: "update",
+        deviceId: "device-b",
+        version: 1,
+        payloadJson: JSON.stringify({
+          id: employeeId,
+          gymId,
+          userId: "u",
+          fullName: "Existing Staff Changed",
+          phone: "03001112222",
+          role: "staff",
+        }),
+        timestamp: new Date().toISOString(),
+      }]);
+
+      expect(result.conflicts).toBe(1);
+      const conflictRow = db.get<{ local_version: number | null }>(
+        `SELECT local_version FROM sync_conflicts WHERE entity_id = ? LIMIT 1`,
+        [employeeId],
+      );
+      expect(conflictRow?.local_version).toBe(1);
     } finally {
       db.close();
       rmSync(dir, { recursive: true, force: true });
