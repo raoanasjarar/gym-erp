@@ -342,6 +342,8 @@ const PAYLOAD_COLUMNS: Record<string, Record<string, string>> = {
     joinDate: "join_date",
     status: "status",
     notes: "notes",
+    profilePhotoPath: "profile_photo_path",
+    profilePhotoThumbPath: "profile_photo_thumb_path",
     lastModifiedByDeviceId: "last_modified_by_device_id",
   },
   memberships: {

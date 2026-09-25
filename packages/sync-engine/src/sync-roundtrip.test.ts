@@ -184,6 +184,47 @@ describe("sync round trip", () => {
     }
   });
 
+  it("preserves member photo paths when a mobile record syncs to the hub", async () => {
+    const { db, gymId, organizationId, dir } = await makeDb();
+    try {
+      const memberId = "member-with-photo";
+      const photoPath = "member-photos/member-with-photo.jpg";
+      const result = applyIncomingRecords(db, [{
+        id: "member-photo-sync-1",
+        gymId,
+        entityType: "members",
+        entityId: memberId,
+        operation: "create",
+        deviceId: "device-a",
+        version: 1,
+        payloadJson: JSON.stringify({
+          id: memberId,
+          gymId,
+          organizationId,
+          memberCode: "MEMBER-000099",
+          fullName: "Photo Member",
+          joinDate: "2026-02-01",
+          gender: "female",
+          profilePhotoPath: photoPath,
+          profilePhotoThumbPath: photoPath,
+          profilePhotoBase64: "data:image/jpeg;base64,AAAA",
+        }),
+        timestamp: new Date().toISOString(),
+      }]);
+
+      expect(result.applied).toBe(1);
+      const saved = db.get<{ profile_photo_path: string | null; profile_photo_thumb_path: string | null }>(
+        `SELECT profile_photo_path, profile_photo_thumb_path FROM members WHERE id = ?`,
+        [memberId],
+      );
+      expect(saved?.profile_photo_path).toBe(photoPath);
+      expect(saved?.profile_photo_thumb_path).toBe(photoPath);
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("does not insert undefined local versions when reconciling an existing employee row", async () => {
     const { db, gymId, organizationId, dir } = await makeDb();
     try {
